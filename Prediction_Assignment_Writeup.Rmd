@@ -1,0 +1,221 @@
+---
+title: "Prediction Assignment Writeup Course Project"
+author: "DMalygin"
+date: "14 08 2019"
+---
+
+## Overview
+
+### Task of the project:
+
+Using the data describing manner of performing physical exercises predict the manner of doing the same exercises in future.
+For the project will be used the Decision Tree and Random forest technics with the following comparisons of their aacuracy on the validation dataset.
+The models will use predictor variables (features) to predict value of the target (dependent) variable 'classe'.
+
+As a result of the work the report will be built in which building of the models, comparisons, errors and choose of the most accurate model will be presented. Also the choosen model will be applied to predict 20 different test cases.
+
+### Describtion of the data
+
+Data describing physical activity was captured with such trackers as: Jawbone Up, Nike FuelBand, and Fitbit which were kept on the belt, forearm, arm, and dumbell of 6 participants. 
+The participants were asked to perform barbell lifts correctly and incorrectly in 5 different ways.
+
+
+
+| Data set                                                              | Describtion       |
+|-----------------------------------------------------------------------|-------------------|
+| https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv  | the training data |
+| https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv   | the test data     |
+
+
+More information is available from the website here: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+
+
+Our target variable is 'classe' which describes manner of performing the gym exercise and has 5 levels:
+
+* A - Exactly according to the specification
+* B - Throwing the elbows to the front
+* C - Lifting the dumbbell only halfway
+* D - Lowering the dumbbell only halfway
+* E - Throwing the hips to the front
+
+
+***
+
+## Loading the files with the data
+```{r echo = TRUE, results='hide', message=FALSE, warning=FALSE}
+library(dplyr)
+
+# Download files
+
+trainingDataSetUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testingDataSetUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+
+for(url in c(trainingDataSetUrl, testingDataSetUrl)) {
+
+  fileName <- URLdecode(url) %>% basename()
+  
+  if (!file.exists(fileName)) {
+    download.file(url, fileName, method = "curl")
+    cat("\n=====>The file [", fileName, "] was downloaded successfully")
+  } else {
+    cat("\n=====>The file [", fileName, "] already exists!")
+  }
+}
+```
+
+
+### Read the files into dataframes
+```{r}
+trainingDataFileName <- URLdecode(trainingDataSetUrl) %>% basename()
+testingDataFileName <- URLdecode(testingDataSetUrl) %>% basename()
+
+trainingDataFrame <- read.csv(trainingDataFileName, header=TRUE, na.strings=c("NA", "", "#DIV/0!"))
+testingDataFrame <- read.csv(testingDataFileName, header=TRUE, na.strings=c("NA", "", "#DIV/0!"))
+```
+
+
+### View the dataFrames
+```{r}
+dim(trainingDataFrame)
+
+# head(trainingDataFrame)
+
+# str(trainingDataFrame)
+```
+
+We see in the training data 160 variables and 19622 observations. To keep this report short and convenient for review, the observation of the data frame was omitted, but during performing of the analysis the observation was done of course.
+
+Also we see that our target variable 'classe' has levels: "A","B","C","D", "E".
+
+***
+
+## Preparation of the data
+
+Since among the variables several are not useful for the training/testing, let's just drop them:
+```{r}
+trainingDataFrame <- trainingDataFrame[,-c(1:7)]
+testingDataFrame <- testingDataFrame[,-c(1:7)]
+```
+
+Also we see plenty of NA string, remove the too:
+```{r}
+trainingDataFrame <- trainingDataFrame[,colSums(is.na(trainingDataFrame)) == 0]
+testingDataFrame <- testingDataFrame[,colSums(is.na(testingDataFrame)) == 0]
+```
+
+
+## Partitioning the data. Over-validation
+
+To perform cross-validation the training data set are to split in 3:1 proportion.
+The proportion was choosen as considered to be recommended in partitioning.
+The models will be trained/fitted over training subset and tested over testing subset.
+As a result of the testings the most accurate model will choosen for predicting every case out of 20.
+
+
+```{r echo = TRUE, results='hide', message=FALSE, warning=FALSE}
+library(caret)
+
+trainingPartitioned <- createDataPartition(trainingDataFrame$classe, p=.75, list = FALSE)
+trainingSubsetOfTrainingDataFrame <- trainingDataFrame[trainingPartitioned, ]
+#dim(trainingSubsetOfTrainingDataFrame)
+
+testingSubsetOfTrainingDataFrame <- trainingDataFrame[-trainingPartitioned, ]
+#dim(testingSubsetOfTrainingDataFrame)
+```
+
+***
+
+## Building and training the models
+
+**The Decision Tree model**
+
+To build the Decision Tree model we will use 'rpart' (Recursive Partitioning And Regression Trees) function with method 'class' since the target value is factor type. The function will split the training dataset in recoursive manner to the point when the the stop criterion is reached.
+
+In order to train the model we will use 'trainingSubsetOfTrainingDataFrame' created above.
+
+```{r echo = TRUE, results='hide', message=FALSE, warning=FALSE}
+#install.packages('rpart')
+library(rpart)
+
+decisionTreeModel <- rpart(classe ~ ., trainingSubsetOfTrainingDataFrame, method="class")
+```
+
+To create the Random Forest model we will use 'randomForest' function as improved version tree modelling which works by averaging a plenty of trees with help of bootstrapped samples reducing the correlation between trees. The method parameter will be set to 'class' as explained above.
+
+**The Random Forest model**
+```{r echo = TRUE, results='hide', message=FALSE, warning=FALSE}
+#install.packages('randomForest')
+library(randomForest)
+
+# this operation may take some time
+randomForestModel <- randomForest(classe ~. , trainingSubsetOfTrainingDataFrame, method = "class")
+```
+
+
+***
+
+## Testing the models
+
+**Testing of the Decision Tree**
+
+After trainig the model we will apply it to the testing dataframe 'testingSubsetOfTrainingDataFrame' created above as a subset of the initial dataset.
+```{r}
+predictionDecisionTree <- predict(decisionTreeModel, testingSubsetOfTrainingDataFrame, type = "class")
+```
+
+
+**Testing of the Random Forest**
+
+```{r}
+predictionRandomForest <- predict(randomForestModel, testingSubsetOfTrainingDataFrame, type = "class")
+```
+
+
+***
+
+## Comparison the predictive accuracy of the models
+
+**Checking the Decision Tree model**
+```{r}
+library(caret)
+confusionMatrix(predictionDecisionTree, testingSubsetOfTrainingDataFrame$classe)
+```
+
+
+**Checking the Decision Tree model**
+```{r}
+library(caret)
+confusionMatrix(predictionRandomForest, testingSubsetOfTrainingDataFrame$classe)
+```
+
+Comparing values of parameters in 'Overall Statistics', we see that the Random Forest model is considerably better than the Decision Tree.
+
+***
+
+## Estimation of the out-of-sample error
+
+As we could see from the output of confusion matrix function, accurace of the Random Forest model is 0,9935 and according to the rule of calculation the out-of-sample error, it is equal to 1 - accuracy = 0,0065 or 0,65%. Or the same result can be calculated as it will be shown above:
+```{r}
+sum(predictionRandomForest != testingSubsetOfTrainingDataFrame$classe) / length(testingSubsetOfTrainingDataFrame$classe)
+```
+
+
+***
+
+## Prediction for 20 cases
+
+Since the the most accurate model is the Random Forest we will use it to predict value for every out of 20 cases.
+
+```{r}
+predictionCases <- predict(randomForestModel, testingDataFrame, type="class")
+
+predictionCases
+```
+
+***
+
+## Conclusion
+
+In this course project we predicted the manner of perfoming gym exercises using both the Decision model which gave us accuracy ~75% with out-of-sample error ~25% and the Random Forest model with ~99% accuracy and ~1% out-of-sample error. Judging from output of confision matrix function we can conclude that the last model considerably more accurate the the first one.
+
